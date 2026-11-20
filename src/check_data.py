@@ -274,7 +274,7 @@ def main():
     results["spelling_variants"] = check_spelling(train, later)
 
     print("\n" + "=" * 70)
-    print("SUMMARY (data_issues for findings.yaml)")
+    print("SUMMARY (data_issues for reports/findings.yaml)")
     print("=" * 70)
     for kind, r in results.items():
         print(f"{kind}: {r}")

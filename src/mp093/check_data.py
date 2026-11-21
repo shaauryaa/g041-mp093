@@ -25,9 +25,7 @@ ID = PARAMS["id_column"]
 ID_COLS = [ID]
 DATE = PARAMS["date_column"]
 
-SENTINEL_CANDIDATES = [-1, -9, -99, -999, -9999, 0, 99, 999, 9999]
-UNIT_FACTORS = [10, 12, 60, 100, 1000]   # exact unit conversions to snap to
-STUCK_MIN_DAYS = 7                        # a run must cover this many dates
+CHECKS = PARAMS["checks"]   # every detection threshold lives in params.yaml
 
 
 def sha256(path):
@@ -60,7 +58,8 @@ def check_leaking_column(train, holdout):
     print(f"\nCorrelation of each numeric column with {TARGET}:")
     print(corr.round(4).to_string())
 
-    leaks = [c for c in missing if c in corr.index and abs(corr[c]) > 0.95]
+    leaks = [c for c in missing
+             if c in corr.index and abs(corr[c]) > CHECKS["leak_min_corr"]]
     for c in leaks:
         diff = (train[c] - train[TARGET]).abs()
         print(f"\n{c}: mean |{c} - {TARGET}| = {diff.mean():.1f} kg "
@@ -73,6 +72,7 @@ def check_leaking_column(train, holdout):
 # ---------------------------------------------------------------- (2)
 def check_unit_mixup(train):
     header(2, "unit_mixup")
+    min_ratio = CHECKS["unit_min_ratio"]
     found = None
     for c in numeric_features(train):
         med = train.groupby(GROUP)[c].median()
@@ -80,13 +80,13 @@ def check_unit_mixup(train):
             continue
         hi, lo = med.idxmax(), med.idxmin()
         ratio = med[hi] / med[lo]
-        flag = "  <-- suspicious" if ratio > 5 else ""
+        flag = "  <-- suspicious" if ratio > min_ratio else ""
         print(f"{c:30s} per-{GROUP} medians {med.round(1).to_dict()}  max/min={ratio:.1f}{flag}")
-        if ratio > 5 and found is None:
+        if ratio > min_ratio and found is None:
             found = (c, hi)
 
     if found is None:
-        print("\nNo column has one block more than 5x away from the others.")
+        print(f"\nNo column has one block more than {min_ratio}x away from the others.")
         print("VERDICT present=False")
         return {"present": False, "column": None, "group_value": None, "factor": None}
 
@@ -94,7 +94,7 @@ def check_unit_mixup(train):
     odd = train.loc[train[GROUP] == g, c]
     rest = train.loc[train[GROUP] != g, c]
     ratio = odd.median() / rest.median()
-    factor = min(UNIT_FACTORS, key=lambda f: abs(f - ratio))
+    factor = min(CHECKS["unit_factors"], key=lambda f: abs(f - ratio))
     print(f"\n{c}: {GROUP}='{g}' median {odd.median():.1f} vs other blocks {rest.median():.1f} "
           f"-> ratio {ratio:.1f}, nearest exact unit factor = {factor}")
     print(f"  '{g}' range:              {odd.min():.1f} .. {odd.max():.1f}")
@@ -108,20 +108,22 @@ def check_unit_mixup(train):
 # ---------------------------------------------------------------- (3)
 def check_sentinel(train, later):
     header(3, "sentinel_value")
+    min_rows = CHECKS["sentinel_min_rows"]
+    times = CHECKS["sentinel_min_times_typical"]
     print("A sentinel must be (a) outside the range seen in the clean later.csv AND")
     print("(b) repeated far more often than a normal value of that column")
-    print("(at least 5 rows and 3x the column's typical count per value).")
-    print(f"Candidates checked: {SENTINEL_CANDIDATES}\n")
+    print(f"(at least {min_rows} rows and {times}x the column's typical count per value).")
+    print(f"Candidates checked: {CHECKS['sentinel_candidates']}\n")
     hits = []
     for c in numeric_features(train):
         lo, hi = later[c].min(), later[c].max()
         typical = train[c].value_counts().median()
-        for v in SENTINEL_CANDIDATES:
+        for v in CHECKS["sentinel_candidates"]:
             n = int((train[c] == v).sum())
             if n == 0:
                 continue
             outside = not (lo <= v <= hi)
-            repeated = n >= max(5, 3 * typical)
+            repeated = n >= max(min_rows, times * typical)
             verdict = "SENTINEL" if outside and repeated else "not a sentinel"
             print(f"{c:30s} value {v:>6}: {n:4d} rows   later.csv range {lo}..{hi}"
                   f"   typical count/value {typical:.0f}   -> {verdict}")
@@ -172,9 +174,10 @@ def longest_run(df, col):
 
 def check_stuck_sensor(train):
     header(5, "stuck_sensor")
+    min_days = CHECKS["stuck_min_days"]
     data = train.drop_duplicates().sort_values([DATE, ID], kind="stable")
     print(f"Sorted by date ({data[DATE].min()} .. {data[DATE].max()}, "
-          f"{data[DATE].nunique()} dates). A stuck run must cover >= {STUCK_MIN_DAYS} dates.\n")
+          f"{data[DATE].nunique()} dates). A stuck run must cover >= {min_days} dates.\n")
     best = None
     for c in numeric_features(train):
         r = longest_run(data, c)
@@ -183,11 +186,11 @@ def check_stuck_sensor(train):
         print(f"{c:30s} all rows: {r['rows']:3d} rows / {r['days']:2d} dates (value {r['value']})"
               f"   within one block: {per_block['rows']:3d} rows / {per_block['days']:2d} dates")
         for cand in (r, per_block):
-            if cand["days"] >= STUCK_MIN_DAYS and (best is None or cand["days"] > best[1]["days"]):
+            if cand["days"] >= min_days and (best is None or cand["days"] > best[1]["days"]):
                 best = (c, cand)
 
     if best is None:
-        print(f"\nNo column repeats one value over {STUCK_MIN_DAYS}+ consecutive dates.")
+        print(f"\nNo column repeats one value over {min_days}+ consecutive dates.")
         print("VERDICT present=False")
         return {"present": False, "column": None, "start_date": None, "end_date": None}
 
@@ -207,21 +210,24 @@ def check_target_typos(train, leak_col):
     jumps = (y / y.shift()).iloc[len(y) // 2:]       # gaps in the upper half
     i = jumps.idxmax()
     print(f"Biggest jump in the upper half: {y[i - 1]} -> {y[i]} (x{jumps[i]:.2f})")
-    above_gap = int(len(y) - i) if jumps[i] >= 3 else 0
+    min_gap = CHECKS["typo_min_gap"]
+    above_gap = int(len(y) - i) if jumps[i] >= min_gap else 0
 
-    above_10x = int((train[TARGET] > 5 * y.median()).sum())
-    print(f"Rows above 5 x median ({5 * y.median():.0f} kg): {above_10x}")
+    times = CHECKS["typo_min_times_median"]
+    above_median = int((train[TARGET] > times * y.median()).sum())
+    print(f"Rows above {times} x median ({times * y.median():.0f} kg): {above_median}")
 
     if leak_col:
+        lo, hi = CHECKS["typo_ratio_band"]
         ratio = train[TARGET] / train[leak_col]
-        n_ratio = int(ratio.between(8, 12).sum())
-        print(f"Cross-check: {TARGET}/{leak_col} is between 8 and 12 for {n_ratio} rows "
+        n_ratio = int(ratio.between(lo, hi).sum())
+        print(f"Cross-check: {TARGET}/{leak_col} is between {lo} and {hi} for {n_ratio} rows "
               f"(normal ratio: median {ratio.median():.3f}, max {ratio.max():.3f})")
 
-    count = max(above_gap, above_10x)
+    count = max(above_gap, above_median)
     present = count > 0
     if not present:
-        print("\nNo group of values sits far above the rest; no gap of 3x or more.")
+        print(f"\nNo group of values sits far above the rest; no gap of {min_gap}x or more.")
     print(f"\nVERDICT present={present}" + (f"  count={count}" if present else ""))
     return {"present": present, "count": count if present else None}
 

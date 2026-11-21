@@ -34,7 +34,7 @@ def clean(df, params):
 
     # 2. One block recorded stock in grams: divide that block's rows only.
     unit = cfg["unit_fix"]
-    rows = out[unit["group_column"]] == unit["group_value"]
+    rows = out[params["group_column"]] == unit["group_value"]
     out[unit["column"]] = out[unit["column"]].astype(float)
     out.loc[rows, unit["column"]] = out.loc[rows, unit["column"]] / unit["factor"]
 
@@ -70,9 +70,10 @@ def main():
 
     # Check: the fixed block's median now sits with the other blocks.
     u = cfg["unit_fix"]
-    med_before = raw.groupby(u["group_column"])[u["column"]].median()
-    med_after = cleaned.groupby(u["group_column"])[u["column"]].median()
-    print(f"\n{u['column']} median per {u['group_column']}:")
+    group = params["group_column"]
+    med_before = raw.groupby(group)[u["column"]].median()
+    med_after = cleaned.groupby(group)[u["column"]].median()
+    print(f"\n{u['column']} median per {group}:")
     print(pd.DataFrame({"before": med_before, "after": med_after}).round(1).to_string())
     others = med_after.drop(u["group_value"]).median()
     ratio = med_after[u["group_value"]] / others

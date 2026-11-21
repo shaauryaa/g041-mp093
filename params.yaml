@@ -8,6 +8,11 @@ data:
 
 target: grain_kg
 
+# Column roles, the same in every CSV (PROBLEM.md section 3).
+id_column: record_id
+date_column: date
+group_column: block         # development block
+
 # Exactly the 8 request fields of POST /predict (PROBLEM.md section 5).
 features:
   - cards_attached
@@ -30,8 +35,7 @@ cleaning:
   drop_duplicates: true
   unit_fix:
     column: stock_kg_morning
-    group_column: block
-    group_value: Block South
+    group_value: Block South  # a value of group_column
     factor: 1000            # Block South typed grams; divide by this
   sentinel:
     column: cards_attached

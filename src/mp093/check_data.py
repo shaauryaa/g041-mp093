@@ -9,7 +9,6 @@ Run from the repository root:
 
 import hashlib
 import re
-from pathlib import Path
 
 import pandas as pd
 
@@ -21,9 +20,10 @@ LATER = data_path(PARAMS, "later")
 HOLDOUT = data_path(PARAMS, "holdout")
 
 TARGET = PARAMS["target"]
-GROUP = PARAMS["cleaning"]["unit_fix"]["group_column"]
-ID_COLS = ["record_id"]
-DATE = "date"
+GROUP = PARAMS["group_column"]
+ID = PARAMS["id_column"]
+ID_COLS = [ID]
+DATE = PARAMS["date_column"]
 
 SENTINEL_CANDIDATES = [-1, -9, -99, -999, -9999, 0, 99, 999, 9999]
 UNIT_FACTORS = [10, 12, 60, 100, 1000]   # exact unit conversions to snap to
@@ -153,8 +153,8 @@ def check_duplicates(train):
     print(f"Rows: {len(train)} as given -> {len(train) - n_no_id} after removing extras")
     if n_no_id:
         print("\nExample duplicated record:")
-        dup_ids = train.loc[no_id.duplicated(keep=False), "record_id"].head(2).tolist()
-        print(train[train.record_id.isin(dup_ids)].to_string(index=False))
+        dup_ids = train.loc[no_id.duplicated(keep=False), ID].head(2).tolist()
+        print(train[train[ID].isin(dup_ids)].to_string(index=False))
     present = n_no_id > 0
     print(f"\nVERDICT present={present}" + (f"  count={n_no_id}" if present else ""))
     return {"present": present, "count": n_no_id if present else None}
@@ -172,7 +172,7 @@ def longest_run(df, col):
 
 def check_stuck_sensor(train):
     header(5, "stuck_sensor")
-    data = train.drop_duplicates().sort_values([DATE, "record_id"], kind="stable")
+    data = train.drop_duplicates().sort_values([DATE, ID], kind="stable")
     print(f"Sorted by date ({data[DATE].min()} .. {data[DATE].max()}, "
           f"{data[DATE].nunique()} dates). A stuck run must cover >= {STUCK_MIN_DAYS} dates.\n")
     best = None

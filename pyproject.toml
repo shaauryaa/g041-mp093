@@ -14,3 +14,7 @@ requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]   # tests can import mp093 even without pip install -e .

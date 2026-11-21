@@ -4,7 +4,7 @@ Handbook section 7 / PROBLEM.md section 4. The script only READS the CSV files;
 it never writes them. It checks this by hashing train.csv before and after.
 
 Run from the repository root:
-    python src/check_data.py
+    python -m mp093.check_data
 """
 
 import hashlib
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]   # src/mp093/check_data.py -> repo root
 RAW = ROOT / "data" / "raw"
 TRAIN = RAW / "train.csv"
 LATER = RAW / "later.csv"

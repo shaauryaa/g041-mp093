@@ -13,14 +13,15 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[2]   # src/mp093/check_data.py -> repo root
-RAW = ROOT / "data" / "raw"
-TRAIN = RAW / "train.csv"
-LATER = RAW / "later.csv"
-HOLDOUT = RAW / "holdout_features.csv"
+from mp093.config import data_path, load_params
 
-TARGET = "grain_kg"
-GROUP = "block"
+PARAMS = load_params()
+TRAIN = data_path(PARAMS, "train")
+LATER = data_path(PARAMS, "later")
+HOLDOUT = data_path(PARAMS, "holdout")
+
+TARGET = PARAMS["target"]
+GROUP = PARAMS["cleaning"]["unit_fix"]["group_column"]
 ID_COLS = ["record_id"]
 DATE = "date"
 

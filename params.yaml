@@ -1,0 +1,44 @@
+# G041 / MP093 settings. Read with yaml.safe_load (mp093.config.load_params).
+# Paths are relative to the repository root.
+
+data:
+  train: data/raw/train.csv
+  later: data/raw/later.csv
+  holdout: data/raw/holdout_features.csv
+
+target: grain_kg
+
+# Exactly the 8 request fields of POST /predict (PROBLEM.md section 5).
+features:
+  - cards_attached
+  - working_hours
+  - biometric_failures
+  - temp_c
+  - stock_kg_morning
+  - days_to_month_end
+  - shop_area
+  - block
+
+# Never used as model inputs: an id, a date, and the leaking column.
+drop_columns:
+  - record_id
+  - date
+  - kg_entered_in_epos_at_close
+
+# Settings for mp093.data.clean(), from reports/findings.yaml.
+cleaning:
+  drop_duplicates: true
+  unit_fix:
+    column: stock_kg_morning
+    group_column: block
+    group_value: Block South
+    factor: 1000            # Block South typed grams; divide by this
+  sentinel:
+    column: cards_attached
+    value: -1               # typed instead of a blank; becomes missing
+  leaking_column: kg_entered_in_epos_at_close
+
+mlflow:
+  tracking_uri: sqlite:///mlflow.db
+  experiment_name: mp093-grain-kg
+  registered_model_name: mp093-grain-model

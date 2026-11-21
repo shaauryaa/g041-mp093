@@ -56,6 +56,27 @@ cleaning:
 # Same names as above, reused through the anchors.
 drop_columns: [*id, *date, *leak]
 
+# Settings for mp093.train.
+train:
+  val_fraction: 0.2           # last 20% of cleaned train.csv (by date) = validation
+  random_state: 42
+  impute_median: [cards_attached]     # missing (was -1) -> column median
+  one_hot: [shop_area, block]         # text columns -> 0/1 columns
+  # One MLflow run per entry. "type" is a scikit-learn regressor class name.
+  models:
+    - name: ridge
+      type: Ridge
+      params: {alpha: 1.0}
+    - name: rf_depth6
+      type: RandomForestRegressor
+      params: {n_estimators: 300, max_depth: 6}
+    - name: rf_depth12
+      type: RandomForestRegressor
+      params: {n_estimators: 300, max_depth: 12}
+    - name: gbr
+      type: GradientBoostingRegressor
+      params: {n_estimators: 300, max_depth: 3, learning_rate: 0.05}
+
 mlflow:
   tracking_uri: sqlite:///mlflow.db
   experiment_name: mp093-grain-kg
